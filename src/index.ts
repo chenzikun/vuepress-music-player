@@ -21,7 +21,7 @@ function buildPluginHooks(opts: MusicPlayerOptions) {
   }
 
   if (!Array.isArray(musicList) || musicList.length === 0) {
-    console.warn('[vuepress-plugin-music-player] musicList is empty or missing.')
+    console.warn('[vuepress-music-player] musicList is empty or missing.')
   }
 
   const NAVBAR = {
@@ -41,7 +41,7 @@ function buildPluginHooks(opts: MusicPlayerOptions) {
   }
 
   return {
-    name: 'vuepress-plugin-music-player',
+    name: 'vuepress-music-player',
     define() {
       return {
         MUSIC_PLAYER_CONFIG: pluginConfig

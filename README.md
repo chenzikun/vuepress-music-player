@@ -1,4 +1,4 @@
-# vuepress-plugin-music-player
+# vuepress-music-player
 
 VuePress 1.x 音乐播放器插件，TypeScript 编写，支持导航栏集成、全局/页面级播放列表与自动播放。
 
@@ -34,7 +34,7 @@ VuePress 插件分两层：`src/index.ts` 在站点**构建时**执行；`src/cl
 ## 安装
 
 ```bash
-npm install vuepress-plugin-music-player
+npm install vuepress-music-player
 ```
 
 ## 全局配置
@@ -44,7 +44,7 @@ npm install vuepress-plugin-music-player
 module.exports = {
   plugins: [
     [
-      require('vuepress-plugin-music-player'),
+      require('vuepress-music-player'),
       {
         enabled: true,
         autoplay: true,
@@ -74,8 +74,8 @@ module.exports = {
 
 ```ts
 // docs/.vuepress/config.ts
-import musicPlayer from 'vuepress-plugin-music-player'
-import type { MusicPlayerOptions } from 'vuepress-plugin-music-player'
+import musicPlayer from 'vuepress-music-player'
+import type { MusicPlayerOptions } from 'vuepress-music-player'
 
 const musicOptions: MusicPlayerOptions = {
   enabled: true,
