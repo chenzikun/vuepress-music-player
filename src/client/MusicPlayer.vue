@@ -102,6 +102,17 @@ const isInserted = ref(false)
 const pageAutoplay = ref<boolean | null>(null)
 const pendingPlay = ref(false)
 const isSwitchingTrack = ref(false)
+const awaitingGestureUnlock = ref(false)
+
+const GESTURE_EVENTS = ['click', 'keydown', 'touchstart', 'wheel', 'scroll'] as const
+const gestureListenerOptions: Record<typeof GESTURE_EVENTS[number], AddEventListenerOptions | boolean> = {
+  click: true,
+  keydown: true,
+  touchstart: { passive: true },
+  wheel: { passive: true },
+  scroll: { passive: true, capture: true }
+}
+let gestureListenersAttached = false
 
 const currentMusic = computed(() => musicList.value[currentIndex.value] || { title: '', link: '' })
 const currentTitle = computed(() => currentMusic.value.title || '未命名歌曲')
@@ -181,16 +192,58 @@ function onAudioEnded() {
   playNext(true)
 }
 
+function removeGestureUnlockListeners() {
+  if (typeof document === 'undefined') return
+  for (const event of GESTURE_EVENTS) {
+    document.removeEventListener(event, onUserGesture, gestureListenerOptions[event])
+  }
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('scroll', onUserGesture, gestureListenerOptions.scroll)
+    window.removeEventListener('wheel', onUserGesture, gestureListenerOptions.wheel)
+  }
+  gestureListenersAttached = false
+}
+
+function attachGestureUnlockListeners() {
+  if (typeof document === 'undefined' || gestureListenersAttached) return
+  gestureListenersAttached = true
+  for (const event of GESTURE_EVENTS) {
+    if (event === 'scroll' || event === 'wheel') continue
+    document.addEventListener(event, onUserGesture, gestureListenerOptions[event])
+  }
+  window.addEventListener('scroll', onUserGesture, gestureListenerOptions.scroll)
+  window.addEventListener('wheel', onUserGesture, gestureListenerOptions.wheel)
+}
+
+function onUserGesture() {
+  if (!awaitingGestureUnlock.value && !pendingPlay.value) return
+  if (isPlaying.value) {
+    removeGestureUnlockListeners()
+    return
+  }
+
+  pendingPlay.value = true
+  isPlaying.value = true
+  void tryStartPlayback()
+}
+
 async function tryStartPlayback() {
   const audio = audioRef.value
   if (!audio || !currentMusic.value.link) return
 
   try {
     await audio.play()
+    awaitingGestureUnlock.value = false
+    removeGestureUnlockListeners()
   } catch {
     if (!isSwitchingTrack.value) {
       isPlaying.value = false
-      pendingPlay.value = false
+      if (pendingPlay.value) {
+        awaitingGestureUnlock.value = true
+        attachGestureUnlockListeners()
+      } else {
+        awaitingGestureUnlock.value = false
+      }
     }
   }
 }
@@ -277,10 +330,12 @@ function startPlayback() {
 
 function pausePlayback() {
   pendingPlay.value = false
+  awaitingGestureUnlock.value = false
   isSwitchingTrack.value = false
   const audio = audioRef.value
   if (audio) audio.pause()
   isPlaying.value = false
+  removeGestureUnlockListeners()
 }
 
 function switchTrack(nextIndex: number, shouldContinue: boolean) {
@@ -347,13 +402,17 @@ onMounted(() => {
     if (!musicList.value.length) {
       applyPlaylist(false)
     }
-    if (shouldAutoplay() && !isPlaying.value) {
-      requestPlay()
+    if (shouldAutoplay()) {
+      attachGestureUnlockListeners()
+      if (!isPlaying.value) {
+        requestPlay()
+      }
     }
   })
 })
 
 onBeforeUnmount(() => {
+  removeGestureUnlockListeners()
   pausePlayback()
 })
 </script>
