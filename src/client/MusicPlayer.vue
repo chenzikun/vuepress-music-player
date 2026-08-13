@@ -60,7 +60,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onContentUpdated, resolveRoutePath, usePageData, usePageFrontmatter, useRoutePath } from 'vuepress/client'
-import { pathsMatchRoute } from '../lib/routePath'
+import { pathsMatchRoute } from './routePath'
 import PlayingIcon from './components/PlayingIcon.vue'
 import SvgImgIcon from './components/SvgImgIcon.vue'
 import { pluginConfig } from './config'

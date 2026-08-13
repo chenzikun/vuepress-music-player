@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pathsMatchRoute } from '../src/lib/routePath'
+import { pathsMatchRoute } from '../src/client/routePath'
 
 const identityResolve = (pathname: string) => pathname
 
