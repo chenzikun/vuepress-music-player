@@ -139,6 +139,7 @@ function requestPlay() {
 }
 
 function schedulePlay(attempt = 0) {
+  if (typeof window === 'undefined') return
   if (!pendingPlay.value) return
 
   nextTick(() => {
@@ -219,6 +220,7 @@ function isHiddenNavbarHost(element: Element | null): boolean {
 }
 
 function insertIntoNavbar() {
+  if (typeof window === 'undefined') return
   if (!navbarConfig.insertIntoNav) return
   const root = rootRef.value
   if (!root) return
@@ -249,6 +251,7 @@ function insertIntoNavbar() {
 }
 
 function scheduleNavbarInsert(attempt = 0) {
+  if (typeof window === 'undefined') return
   insertIntoNavbar()
   if (!isInserted.value && attempt < 30) {
     window.setTimeout(() => scheduleNavbarInsert(attempt + 1), 100)
