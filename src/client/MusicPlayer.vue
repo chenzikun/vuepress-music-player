@@ -117,7 +117,7 @@ function shouldAutoplay(): boolean {
 }
 
 function applyPlaylist(resetProgress: boolean) {
-  const pageMusic = resolvePageMusic(frontmatter.value, pageData.value.musicPlayer)
+  const pageMusic = resolvePageMusic(frontmatter.value, pageData.value?.musicPlayer)
   const usePageList = pageMusic.hasPageMusic && pageMusic.list.length > 0
 
   musicList.value = usePageList ? pageMusic.list : globalMusicList
@@ -196,7 +196,8 @@ async function tryStartPlayback() {
 }
 
 function syncPlaylistWithRoute() {
-  if (pageData.value.path !== route.path) return
+  const pagePath = pageData.value?.path
+  if (!pagePath || pagePath !== route.path) return
   applyPlaylist(true)
 }
 
@@ -319,8 +320,8 @@ function onTimeUpdate(event: Event) {
 watch(
   () => ({
     routePath: route.path,
-    pagePath: pageData.value.path,
-    musicPlayer: pageData.value.musicPlayer,
+    pagePath: pageData.value?.path,
+    musicPlayer: pageData.value?.musicPlayer,
     music: frontmatter.value?.music
   }),
   () => {
@@ -336,7 +337,8 @@ watch(() => route.path, () => {
 onMounted(() => {
   nextTick(() => {
     scheduleNavbarInsert()
-    if (pageData.value.path !== route.path) return
+    const pagePath = pageData.value?.path
+    if (!pagePath || pagePath !== route.path) return
     if (!musicList.value.length) {
       applyPlaylist(false)
     }
