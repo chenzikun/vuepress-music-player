@@ -61,6 +61,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onContentUpdated, resolveRoutePath, usePageData, usePageFrontmatter, useRoutePath } from 'vuepress/client'
 import { pathsMatchRoute } from './routePath'
+import { playlistFingerprint } from './playlist'
 import PlayingIcon from './components/PlayingIcon.vue'
 import SvgImgIcon from './components/SvgImgIcon.vue'
 import { pluginConfig } from './config'
@@ -114,6 +115,13 @@ const gestureListenerOptions: Record<typeof GESTURE_EVENTS[number], AddEventList
 }
 let gestureListenersAttached = false
 
+const lastSynced = {
+  routeKey: '',
+  fingerprint: ''
+}
+
+let pageDataRetryTimer: number | undefined
+
 const currentMusic = computed(() => musicList.value[currentIndex.value] || { title: '', link: '' })
 const currentTitle = computed(() => currentMusic.value.title || '未命名歌曲')
 const currentCover = computed(() => currentMusic.value.cover || '')
@@ -127,25 +135,15 @@ function shouldAutoplay(): boolean {
   return globalAutoplay
 }
 
-function applyPlaylist(resetProgress: boolean) {
+function resolveActivePlaylist() {
   const pageMusic = resolvePageMusic(frontmatter.value, pageData.value?.musicPlayer)
   const usePageList = pageMusic.hasPageMusic && pageMusic.list.length > 0
+  const list = usePageList ? pageMusic.list : globalMusicList
 
-  musicList.value = usePageList ? pageMusic.list : globalMusicList
-  pageAutoplay.value = usePageList ? pageMusic.autoplay : null
-
-  if (resetProgress) {
-    currentIndex.value = 0
-    pausePlayback()
-    nextTick(() => {
-      const audio = audioRef.value
-      if (audio && currentMusic.value.link) {
-        audio.load()
-      }
-      if (shouldAutoplay()) {
-        requestPlay()
-      }
-    })
+  return {
+    list,
+    pageAutoplay: usePageList ? pageMusic.autoplay : null,
+    fingerprint: playlistFingerprint(list)
   }
 }
 
@@ -264,45 +262,85 @@ function isPageDataSynced(): boolean {
 
 function ensureBootstrapPlaylist() {
   if (musicList.value.length > 0 || globalMusicList.length === 0) return
+
   musicList.value = globalMusicList
   pageAutoplay.value = null
+  lastSynced.fingerprint = playlistFingerprint(globalMusicList)
 }
 
 function syncPlaylistWithRoute() {
   const currentRoutePath = routePath.value
   if (!currentRoutePath) return
 
-  if (isPageDataSynced()) {
-    applyPlaylist(true)
+  const routeKey = resolveRoutePath(currentRoutePath, currentRoutePath)
+
+  if (!isPageDataSynced()) {
+    ensureBootstrapPlaylist()
     return
   }
 
-  // pageData 尚未与 route 对齐：只 bootstrap 全局列表，避免生产环境歌单一直为空；
-  // 换页过程中若已有列表则保持，等对齐后再切换页面歌单。
-  ensureBootstrapPlaylist()
-}
+  const { list, pageAutoplay: nextPageAutoplay, fingerprint } = resolveActivePlaylist()
 
-const playlistSyncDelays = [100, 300, 600]
-let playlistSyncTimers: number[] = []
-
-function clearPlaylistSyncTimers() {
-  if (typeof window === 'undefined') return
-  for (const timer of playlistSyncTimers) {
-    window.clearTimeout(timer)
+  // C1/C6: 同一路由 + 同一歌单 → 不重复 load/play
+  if (routeKey === lastSynced.routeKey && fingerprint === lastSynced.fingerprint) {
+    return
   }
-  playlistSyncTimers = []
+
+  const playlistChanged = fingerprint !== lastSynced.fingerprint
+  const wasPlaying = isPlaying.value || pendingPlay.value
+  const prevRouteKey = lastSynced.routeKey
+  const prevFingerprint = lastSynced.fingerprint
+  const isFirstSync = prevRouteKey === '' && prevFingerprint === ''
+
+  lastSynced.routeKey = routeKey
+  lastSynced.fingerprint = fingerprint
+
+  musicList.value = list
+  pageAutoplay.value = nextPageAutoplay
+
+  // C6: 仅换页、歌单相同 → 不碰播放器
+  if (!playlistChanged) {
+    return
+  }
+
+  // C7/C8/C9: 歌单变化才 load；手动暂停后换页不强制播；首次进入 autoplay 一次
+  currentIndex.value = 0
+  nextTick(() => {
+    const audio = audioRef.value
+    if (audio && currentMusic.value.link) {
+      audio.load()
+    }
+
+    const shouldResume = wasPlaying && shouldAutoplay()
+    const shouldAutoplayOnFirstSync = isFirstSync && shouldAutoplay()
+
+    if (shouldResume || shouldAutoplayOnFirstSync) {
+      requestPlay()
+    } else if (wasPlaying) {
+      pausePlayback()
+    }
+  })
 }
 
-function schedulePlaylistSync() {
-  syncPlaylistWithRoute()
-  nextTick(() => syncPlaylistWithRoute())
+function schedulePageDataRetry() {
   if (typeof window === 'undefined') return
+  if (isPageDataSynced()) return
 
-  clearPlaylistSyncTimers()
-  window.requestAnimationFrame(() => syncPlaylistWithRoute())
-  playlistSyncTimers = playlistSyncDelays.map((delay) =>
-    window.setTimeout(() => syncPlaylistWithRoute(), delay)
-  )
+  if (pageDataRetryTimer !== undefined) {
+    window.clearTimeout(pageDataRetryTimer)
+  }
+
+  // C10: route 变化后最多一次延迟重试
+  pageDataRetryTimer = window.setTimeout(() => {
+    pageDataRetryTimer = undefined
+    syncPlaylistWithRoute()
+  }, 200)
+}
+
+function clearPageDataRetryTimer() {
+  if (typeof window === 'undefined' || pageDataRetryTimer === undefined) return
+  window.clearTimeout(pageDataRetryTimer)
+  pageDataRetryTimer = undefined
 }
 
 function findNavbarContainer(): HTMLElement | null {
@@ -431,35 +469,31 @@ watch(
     music: frontmatter.value?.music
   }),
   () => {
-    schedulePlaylistSync()
+    syncPlaylistWithRoute()
   },
   { deep: true, immediate: true }
 )
 
 watch(routePath, () => {
-  schedulePlaylistSync()
   nextTick(() => scheduleNavbarInsert())
+  schedulePageDataRetry()
 })
 
 onContentUpdated(() => {
-  schedulePlaylistSync()
+  syncPlaylistWithRoute()
 })
 
 onMounted(() => {
   nextTick(() => {
     scheduleNavbarInsert()
-    schedulePlaylistSync()
-    if (shouldAutoplay()) {
+    if (globalAutoplay) {
       attachGestureUnlockListeners()
-      if (!isPlaying.value && musicList.value.length > 0) {
-        requestPlay()
-      }
     }
   })
 })
 
 onBeforeUnmount(() => {
-  clearPlaylistSyncTimers()
+  clearPageDataRetryTimer()
   removeGestureUnlockListeners()
   pausePlayback()
 })

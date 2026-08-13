@@ -167,6 +167,8 @@ music:
 
 ## 开发
 
+约束清单见 [docs/playlist-constraints.md](./docs/playlist-constraints.md)，改播放器逻辑前请对照。
+
 ```bash
 npm install
 npm test
