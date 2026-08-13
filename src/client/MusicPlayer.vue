@@ -59,8 +59,8 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { onContentUpdated, resolveRoutePath, usePageData, usePageFrontmatter } from 'vuepress/client'
+import { onContentUpdated, resolveRoutePath, usePageData, usePageFrontmatter, useRoutePath } from 'vuepress/client'
+import { pathsMatchRoute } from '../lib/routePath'
 import PlayingIcon from './components/PlayingIcon.vue'
 import SvgImgIcon from './components/SvgImgIcon.vue'
 import { pluginConfig } from './config'
@@ -88,7 +88,7 @@ const globalAutoplay = CONFIG.autoplay
 const globalMusicList = CONFIG.musicList || []
 const navbarConfig = CONFIG.navbar || { insertIntoNav: true, fallbackRight: '7.5rem' }
 
-const route = useRoute()
+const routePath = useRoutePath()
 const pageData = usePageData<PageData>()
 const frontmatter = usePageFrontmatter<Record<string, unknown>>()
 
@@ -254,30 +254,55 @@ async function tryStartPlayback() {
   }
 }
 
-function pathsMatch(pagePath: string | undefined, routePath: string | undefined): boolean {
-  if (!pagePath || !routePath) return false
-  return resolveRoutePath(pagePath) === resolveRoutePath(routePath)
+function pathsMatch(pagePath: string | undefined, currentRoutePath: string | undefined): boolean {
+  return pathsMatchRoute(pagePath, currentRoutePath, resolveRoutePath)
+}
+
+function isPageDataSynced(): boolean {
+  return pathsMatch(pageData.value?.path, routePath.value)
+}
+
+function ensureBootstrapPlaylist() {
+  if (musicList.value.length > 0 || globalMusicList.length === 0) return
+  musicList.value = globalMusicList
+  pageAutoplay.value = null
 }
 
 function syncPlaylistWithRoute() {
-  const routePath = route?.path
-  if (!routePath) return
+  const currentRoutePath = routePath.value
+  if (!currentRoutePath) return
 
-  const pagePath = pageData.value?.path
-  // SPA 换页时 route 先变、pageData 后更新；未对齐前不要套用旧页/全局列表
-  if (!pathsMatch(pagePath, routePath)) return
+  if (isPageDataSynced()) {
+    applyPlaylist(true)
+    return
+  }
 
-  applyPlaylist(true)
+  // pageData 尚未与 route 对齐：只 bootstrap 全局列表，避免生产环境歌单一直为空；
+  // 换页过程中若已有列表则保持，等对齐后再切换页面歌单。
+  ensureBootstrapPlaylist()
+}
+
+const playlistSyncDelays = [100, 300, 600]
+let playlistSyncTimers: number[] = []
+
+function clearPlaylistSyncTimers() {
+  if (typeof window === 'undefined') return
+  for (const timer of playlistSyncTimers) {
+    window.clearTimeout(timer)
+  }
+  playlistSyncTimers = []
 }
 
 function schedulePlaylistSync() {
   syncPlaylistWithRoute()
-  nextTick(() => {
-    syncPlaylistWithRoute()
-    if (typeof window !== 'undefined') {
-      window.requestAnimationFrame(() => syncPlaylistWithRoute())
-    }
-  })
+  nextTick(() => syncPlaylistWithRoute())
+  if (typeof window === 'undefined') return
+
+  clearPlaylistSyncTimers()
+  window.requestAnimationFrame(() => syncPlaylistWithRoute())
+  playlistSyncTimers = playlistSyncDelays.map((delay) =>
+    window.setTimeout(() => syncPlaylistWithRoute(), delay)
+  )
 }
 
 function findNavbarContainer(): HTMLElement | null {
@@ -400,7 +425,7 @@ function onTimeUpdate(event: Event) {
 
 watch(
   () => ({
-    routePath: route?.path,
+    routePath: routePath.value,
     pagePath: pageData.value?.path,
     musicPlayer: pageData.value?.musicPlayer,
     music: frontmatter.value?.music
@@ -411,7 +436,7 @@ watch(
   { deep: true, immediate: true }
 )
 
-watch(() => route?.path, () => {
+watch(routePath, () => {
   schedulePlaylistSync()
   nextTick(() => scheduleNavbarInsert())
 })
@@ -423,13 +448,10 @@ onContentUpdated(() => {
 onMounted(() => {
   nextTick(() => {
     scheduleNavbarInsert()
-    if (!pathsMatch(pageData.value?.path, route?.path)) return
-    if (!musicList.value.length) {
-      applyPlaylist(false)
-    }
+    schedulePlaylistSync()
     if (shouldAutoplay()) {
       attachGestureUnlockListeners()
-      if (!isPlaying.value) {
+      if (!isPlaying.value && musicList.value.length > 0) {
         requestPlay()
       }
     }
@@ -437,6 +459,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  clearPlaylistSyncTimers()
   removeGestureUnlockListeners()
   pausePlayback()
 })
