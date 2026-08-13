@@ -60,7 +60,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { usePageData, usePageFrontmatter } from 'vuepress/client'
+import { onContentUpdated, resolveRoutePath, usePageData, usePageFrontmatter } from 'vuepress/client'
 import PlayingIcon from './components/PlayingIcon.vue'
 import SvgImgIcon from './components/SvgImgIcon.vue'
 import { pluginConfig } from './config'
@@ -137,9 +137,15 @@ function applyPlaylist(resetProgress: boolean) {
   if (resetProgress) {
     currentIndex.value = 0
     pausePlayback()
-    if (shouldAutoplay()) {
-      requestPlay()
-    }
+    nextTick(() => {
+      const audio = audioRef.value
+      if (audio && currentMusic.value.link) {
+        audio.load()
+      }
+      if (shouldAutoplay()) {
+        requestPlay()
+      }
+    })
   }
 }
 
@@ -248,14 +254,30 @@ async function tryStartPlayback() {
   }
 }
 
+function pathsMatch(pagePath: string | undefined, routePath: string | undefined): boolean {
+  if (!pagePath || !routePath) return false
+  return resolveRoutePath(pagePath) === resolveRoutePath(routePath)
+}
+
 function syncPlaylistWithRoute() {
   const routePath = route?.path
   if (!routePath) return
 
   const pagePath = pageData.value?.path
-  // pageData 未就绪时仍应用全局列表；就绪后需与 route 对齐再切换页面列表
-  if (pagePath && pagePath !== routePath) return
+  // SPA 换页时 route 先变、pageData 后更新；未对齐前不要套用旧页/全局列表
+  if (!pathsMatch(pagePath, routePath)) return
+
   applyPlaylist(true)
+}
+
+function schedulePlaylistSync() {
+  syncPlaylistWithRoute()
+  nextTick(() => {
+    syncPlaylistWithRoute()
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => syncPlaylistWithRoute())
+    }
+  })
 }
 
 function findNavbarContainer(): HTMLElement | null {
@@ -384,21 +406,24 @@ watch(
     music: frontmatter.value?.music
   }),
   () => {
-    syncPlaylistWithRoute()
+    schedulePlaylistSync()
   },
   { deep: true, immediate: true }
 )
 
 watch(() => route?.path, () => {
+  schedulePlaylistSync()
   nextTick(() => scheduleNavbarInsert())
+})
+
+onContentUpdated(() => {
+  schedulePlaylistSync()
 })
 
 onMounted(() => {
   nextTick(() => {
     scheduleNavbarInsert()
-    const routePath = route?.path
-    const pagePath = pageData.value?.path
-    if (pagePath && routePath && pagePath !== routePath) return
+    if (!pathsMatch(pageData.value?.path, route?.path)) return
     if (!musicList.value.length) {
       applyPlaylist(false)
     }
