@@ -196,8 +196,12 @@ async function tryStartPlayback() {
 }
 
 function syncPlaylistWithRoute() {
+  const routePath = route?.path
+  if (!routePath) return
+
   const pagePath = pageData.value?.path
-  if (!pagePath || pagePath !== route.path) return
+  // pageData 未就绪时仍应用全局列表；就绪后需与 route 对齐再切换页面列表
+  if (pagePath && pagePath !== routePath) return
   applyPlaylist(true)
 }
 
@@ -319,7 +323,7 @@ function onTimeUpdate(event: Event) {
 
 watch(
   () => ({
-    routePath: route.path,
+    routePath: route?.path,
     pagePath: pageData.value?.path,
     musicPlayer: pageData.value?.musicPlayer,
     music: frontmatter.value?.music
@@ -330,15 +334,16 @@ watch(
   { deep: true, immediate: true }
 )
 
-watch(() => route.path, () => {
+watch(() => route?.path, () => {
   nextTick(() => scheduleNavbarInsert())
 })
 
 onMounted(() => {
   nextTick(() => {
     scheduleNavbarInsert()
+    const routePath = route?.path
     const pagePath = pageData.value?.path
-    if (!pagePath || pagePath !== route.path) return
+    if (pagePath && routePath && pagePath !== routePath) return
     if (!musicList.value.length) {
       applyPlaylist(false)
     }
