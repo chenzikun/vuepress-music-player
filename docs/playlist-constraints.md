@@ -41,3 +41,11 @@
 |----|------|
 | C14 | client 代码自包含在 `dist/client/`，不引用包外路径 |
 | C15 | `ClientOnly` 包裹，避免 hydration mismatch |
+
+## 快捷键
+
+| ID | 约束 |
+|----|------|
+| C16 | `Space` 播放/暂停；`←` / `→` 上一首/下一首 |
+| C17 | 焦点在 `input` / `textarea` / `select` / `contenteditable` 时不触发 |
+| C18 | 快捷键监听随组件 mount/unmount 注册/移除 |

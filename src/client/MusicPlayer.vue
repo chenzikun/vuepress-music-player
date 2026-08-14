@@ -61,6 +61,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onContentUpdated, resolveRoutePath, usePageData, usePageFrontmatter, useRoutePath } from 'vuepress/client'
 import { pathsMatchRoute } from './routePath'
+import { isEditableTarget, resolveKeyboardShortcut } from './keyboard'
 import { playlistFingerprint } from './playlist'
 import PlayingIcon from './components/PlayingIcon.vue'
 import SvgImgIcon from './components/SvgImgIcon.vue'
@@ -121,6 +122,7 @@ const lastSynced = {
 }
 
 let pageDataRetryTimer: number | undefined
+let keyboardListenerAttached = false
 
 const currentMusic = computed(() => musicList.value[currentIndex.value] || { title: '', link: '' })
 const currentTitle = computed(() => currentMusic.value.title || '未命名歌曲')
@@ -219,7 +221,11 @@ function attachGestureUnlockListeners() {
   window.addEventListener('wheel', onUserGesture, gestureListenerOptions.wheel)
 }
 
-function onUserGesture() {
+function onUserGesture(event?: Event) {
+  if (event instanceof KeyboardEvent && resolveKeyboardShortcut(event.key)) {
+    return
+  }
+
   if (!awaitingGestureUnlock.value && !pendingPlay.value) return
   if (isPlaying.value) {
     removeGestureUnlockListeners()
@@ -455,6 +461,40 @@ function playNext(_fromEnded = false) {
   switchTrack(nextIndex, true)
 }
 
+function onKeyboardShortcut(event: KeyboardEvent) {
+  if (isEditableTarget(event.target)) return
+
+  const action = resolveKeyboardShortcut(event.key)
+  if (!action) return
+
+  event.preventDefault()
+
+  if (action === 'toggle') {
+    togglePlay()
+    return
+  }
+
+  if (!musicList.value.length) return
+
+  if (action === 'prev') {
+    playPrev()
+  } else {
+    playNext()
+  }
+}
+
+function attachKeyboardShortcuts() {
+  if (typeof document === 'undefined' || keyboardListenerAttached) return
+  keyboardListenerAttached = true
+  document.addEventListener('keydown', onKeyboardShortcut)
+}
+
+function removeKeyboardShortcuts() {
+  if (typeof document === 'undefined' || !keyboardListenerAttached) return
+  document.removeEventListener('keydown', onKeyboardShortcut)
+  keyboardListenerAttached = false
+}
+
 function onTimeUpdate(event: Event) {
   const target = event.target as HTMLAudioElement
   const { duration, currentTime } = target
@@ -486,6 +526,7 @@ onContentUpdated(() => {
 onMounted(() => {
   nextTick(() => {
     scheduleNavbarInsert()
+    attachKeyboardShortcuts()
     if (globalAutoplay) {
       attachGestureUnlockListeners()
     }
@@ -494,6 +535,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearPageDataRetryTimer()
+  removeKeyboardShortcuts()
   removeGestureUnlockListeners()
   pausePlayback()
 })
