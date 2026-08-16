@@ -32,9 +32,9 @@
 
 | ID | 约束 |
 |----|------|
-| C12 | 浏览器拦截后，**本标签页可见且有焦点**时，点击/滚动/触摸/滚轮可解锁（不含任意键） |
+| C12 | 浏览器拦截后，**本页 `document.hasFocus()`** 时，点击/滚动/触摸/滚轮/按键可解锁 |
 | C13 | 播放成功后移除手势监听 |
-| C19 | 快捷键与解锁均要求 `visibilityState === 'visible'` 且 `document.hasFocus()` |
+| C19 | 快捷键与解锁均要求 `document.hasFocus()`（不要求 `visibilityState`） |
 
 ## 打包与渲染
 

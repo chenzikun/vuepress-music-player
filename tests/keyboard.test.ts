@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { resolveKeyboardShortcut, isPageActive } from '../src/client/keyboard'
 
 describe('isPageActive', () => {
-  it('requires visible and focused document', () => {
-    expect(isPageActive({ visibilityState: 'visible', hasFocus: () => true })).toBe(true)
-    expect(isPageActive({ visibilityState: 'hidden', hasFocus: () => true })).toBe(false)
-    expect(isPageActive({ visibilityState: 'visible', hasFocus: () => false })).toBe(false)
+  it('requires document.hasFocus()', () => {
+    expect(isPageActive({ hasFocus: () => true })).toBe(true)
+    expect(isPageActive({ hasFocus: () => false })).toBe(false)
   })
 
   it('returns false when document is missing', () => {

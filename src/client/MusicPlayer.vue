@@ -106,9 +106,10 @@ const pendingPlay = ref(false)
 const isSwitchingTrack = ref(false)
 const awaitingGestureUnlock = ref(false)
 
-const GESTURE_EVENTS = ['click', 'touchstart', 'wheel', 'scroll'] as const
+const GESTURE_EVENTS = ['click', 'keydown', 'touchstart', 'wheel', 'scroll'] as const
 const gestureListenerOptions: Record<typeof GESTURE_EVENTS[number], AddEventListenerOptions | boolean> = {
   click: true,
+  keydown: true,
   touchstart: { passive: true },
   wheel: { passive: true },
   scroll: { passive: true, capture: true }
@@ -463,6 +464,9 @@ function onKeyboardShortcut(event: KeyboardEvent) {
 
   const action = resolveKeyboardShortcut(event.key)
   if (!action) return
+
+  // autoplay 待解锁时由 onUserGesture 统一处理按键
+  if (awaitingGestureUnlock.value || pendingPlay.value) return
 
   event.preventDefault()
 

@@ -1,6 +1,6 @@
-export function isPageActive(doc?: Pick<Document, 'visibilityState' | 'hasFocus'>): boolean {
+export function isPageActive(doc?: Pick<Document, 'hasFocus'>): boolean {
   if (!doc) return false
-  return doc.visibilityState === 'visible' && doc.hasFocus()
+  return doc.hasFocus()
 }
 
 export function isEditableTarget(target: EventTarget | null): boolean {
