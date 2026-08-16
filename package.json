@@ -1,6 +1,6 @@
 {
   "name": "vuepress-music-player",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "VuePress music player plugin with navbar integration, autoplay, and per-page playlist support",
   "type": "module",
   "license": "MIT",
