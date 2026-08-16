@@ -1,3 +1,8 @@
+export function isPageActive(doc?: Pick<Document, 'visibilityState' | 'hasFocus'>): boolean {
+  if (!doc) return false
+  return doc.visibilityState === 'visible' && doc.hasFocus()
+}
+
 export function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
 

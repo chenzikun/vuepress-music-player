@@ -61,7 +61,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onContentUpdated, resolveRoutePath, usePageData, usePageFrontmatter, useRoutePath } from 'vuepress/client'
 import { pathsMatchRoute } from './routePath'
-import { isEditableTarget, resolveKeyboardShortcut } from './keyboard'
+import { isEditableTarget, isPageActive, resolveKeyboardShortcut } from './keyboard'
 import { playlistFingerprint } from './playlist'
 import PlayingIcon from './components/PlayingIcon.vue'
 import SvgImgIcon from './components/SvgImgIcon.vue'
@@ -106,10 +106,9 @@ const pendingPlay = ref(false)
 const isSwitchingTrack = ref(false)
 const awaitingGestureUnlock = ref(false)
 
-const GESTURE_EVENTS = ['click', 'keydown', 'touchstart', 'wheel', 'scroll'] as const
+const GESTURE_EVENTS = ['click', 'touchstart', 'wheel', 'scroll'] as const
 const gestureListenerOptions: Record<typeof GESTURE_EVENTS[number], AddEventListenerOptions | boolean> = {
   click: true,
-  keydown: true,
   touchstart: { passive: true },
   wheel: { passive: true },
   scroll: { passive: true, capture: true }
@@ -221,11 +220,8 @@ function attachGestureUnlockListeners() {
   window.addEventListener('wheel', onUserGesture, gestureListenerOptions.wheel)
 }
 
-function onUserGesture(event?: Event) {
-  if (event instanceof KeyboardEvent && resolveKeyboardShortcut(event.key)) {
-    return
-  }
-
+function onUserGesture() {
+  if (typeof document !== 'undefined' && !isPageActive(document)) return
   if (!awaitingGestureUnlock.value && !pendingPlay.value) return
   if (isPlaying.value) {
     removeGestureUnlockListeners()
@@ -462,6 +458,7 @@ function playNext(_fromEnded = false) {
 }
 
 function onKeyboardShortcut(event: KeyboardEvent) {
+  if (typeof document !== 'undefined' && !isPageActive(document)) return
   if (isEditableTarget(event.target)) return
 
   const action = resolveKeyboardShortcut(event.key)
