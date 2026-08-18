@@ -223,6 +223,7 @@ function attachGestureUnlockListeners() {
 
 function onUserGesture() {
   if (typeof document !== 'undefined' && !isPageActive(document)) return
+  if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
   if (!awaitingGestureUnlock.value && !pendingPlay.value) return
   if (isPlaying.value) {
     removeGestureUnlockListeners()
@@ -237,6 +238,7 @@ function onUserGesture() {
 async function tryStartPlayback() {
   const audio = audioRef.value
   if (!audio || !currentMusic.value.link) return
+  if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
 
   try {
     await audio.play()
@@ -484,6 +486,23 @@ function onKeyboardShortcut(event: KeyboardEvent) {
   }
 }
 
+function onVisibilityChange() {
+  if (typeof document === 'undefined') return
+  if (document.visibilityState === 'hidden' && isPlaying.value) {
+    pausePlayback()
+  }
+}
+
+function attachVisibilityListener() {
+  if (typeof document === 'undefined') return
+  document.addEventListener('visibilitychange', onVisibilityChange)
+}
+
+function removeVisibilityListener() {
+  if (typeof document === 'undefined') return
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+}
+
 function attachKeyboardShortcuts() {
   if (typeof document === 'undefined' || keyboardListenerAttached) return
   keyboardListenerAttached = true
@@ -528,6 +547,7 @@ onMounted(() => {
   nextTick(() => {
     scheduleNavbarInsert()
     attachKeyboardShortcuts()
+    attachVisibilityListener()
     if (globalAutoplay) {
       attachGestureUnlockListeners()
     }
@@ -537,6 +557,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearPageDataRetryTimer()
   removeKeyboardShortcuts()
+  removeVisibilityListener()
   removeGestureUnlockListeners()
   pausePlayback()
 })
